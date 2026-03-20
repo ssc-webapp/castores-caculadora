@@ -220,7 +220,7 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
         // Auto-format currency on input blur/focus
         facturadoInput.addEventListener('blur', function() {
             let val = parseMoney(this.value);
-            if(val > 0) this.value = formatMoney(val).replace('$', '').trim(); // Remove default $ to use the UI one
+            if(val > 0) this.value = formatMoney(val).replace('$', '').trim();
         });
         facturadoInput.addEventListener('focus', function() {
             let val = parseMoney(this.value);
@@ -228,21 +228,78 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
             else this.value = '';
         });
 
-        // === PARSER DE CSV ===
-        function parseCSV(csvText) {
-            const lines = csvText.split('\n').filter(line => line.trim() !== '');
-            const data = [];
-            const regex = /,(?=(?:(?:[^"]*"){2})*[^"]*$)/;
+        // === PARSER DE CSV ROBUSTO Y DINÁMICO ===
+        function parseCSVLine(text) {
+            let row = [];
+            let inQuotes = false;
+            let current = "";
+            for (let i = 0; i < text.length; i++) {
+                let char = text[i];
+                if (char === '"' && text[i+1] === '"') { 
+                    current += '"';
+                    i++;
+                } else if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    row.push(current.trim());
+                    current = "";
+                } else {
+                    current += char;
+                }
+            }
+            row.push(current.trim());
+            return row;
+        }
 
-            for (let i = 1; i < lines.length; i++) {
-                const cols = lines[i].split(regex).map(col => col.replace(/^"|"$/g, '').trim());
-                if(cols.length >= 9) {
-                    data.push({
-                        rastreo: cols[0],
-                        destino: cols[3],
-                        bultos: parseInt(cols[4]) || 0,
-                        costo_guia: parseFloat(cols[8]) || 0
-                    });
+        function parseCSV(csvText) {
+            // Maneja retornos de carro de Windows y Mac/Linux
+            const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
+            if (lines.length === 0) return [];
+            
+            // 1. Buscar la fila de encabezados real (por si hay filas en blanco o títulos al inicio)
+            let headerIndex = 0;
+            let headers = [];
+            for (let i = 0; i < Math.min(5, lines.length); i++) {
+                const tempHeaders = parseCSVLine(lines[i]).map(h => h.toLowerCase().trim());
+                if (tempHeaders.some(h => h.includes('destino') || h.includes('bulto') || h.includes('costo'))) {
+                    headerIndex = i;
+                    headers = tempHeaders;
+                    break;
+                }
+            }
+            if (headers.length === 0) {
+                headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim());
+            }
+            
+            // 2. Buscar índices exactos con palabras clave más seguras
+            let iRastreo = headers.findIndex(h => h.includes('rastreo') || h.includes('link') || h.includes('url'));
+            let iDestino = headers.findIndex(h => h.includes('destino') || h.includes('ciudad') || h.includes('estado'));
+            let iBultos = headers.findIndex(h => h.includes('bulto') || h.includes('pieza') || h.includes('cant'));
+            let iCosto = headers.findIndex(h => h.includes('costo') || h.includes('precio') || h.includes('importe'));
+
+            // Fallback en caso de que la primera línea no sean encabezados o tengan otro nombre
+            if (iRastreo === -1) iRastreo = 0;
+            if (iDestino === -1) iDestino = 3;
+            if (iBultos === -1) iBultos = 4;
+            if (iCosto === -1) iCosto = 8;
+
+            const data = [];
+            for (let i = headerIndex + 1; i < lines.length; i++) {
+                const cols = parseCSVLine(lines[i]);
+                
+                // Asegurarnos de que esta línea tiene datos hasta donde necesitamos
+                if (cols.length > Math.max(iDestino, iCosto)) {
+                    const destinoVal = cols[iDestino];
+                    
+                    // EXCLUYE filas vacías y valores que sean SOLO números (como las guías)
+                    if(destinoVal && destinoVal.length > 2 && isNaN(destinoVal.replace(/ /g, ''))) { 
+                        data.push({
+                            rastreo: cols[iRastreo] || "",
+                            destino: destinoVal.toUpperCase(),
+                            bultos: parseInt(cols[iBultos]) || 0,
+                            costo_guia: parseFloat((cols[iCosto] || "").replace(/[^0-9.-]+/g, "")) || 0
+                        });
+                    }
                 }
             }
             return data;
@@ -273,9 +330,9 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
         }
 
         function populateDestinos() {
-            // Remueve destinos que contengan "TIJUANA"
+            // Filtra nulos, remueve destinos que contengan "TIJUANA" y bloquea puros números por seguridad
             const uniqueDestinos = [...new Set(shippingData.map(item => item.destino))]
-                .filter(d => d && !d.toUpperCase().includes('TIJUANA'))
+                .filter(d => d && !d.includes('TIJUANA') && isNaN(d.replace(/ /g, '')))
                 .sort();
             
             destinoSelect.innerHTML = '<option value="" class="text-gray-500">Selecciona el destino...</option>';
@@ -304,10 +361,6 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
             const presupuestoTotal = facturado * 0.04;
             const guiaIdeal = presupuestoTotal - GESTION_FIJA;
 
-            if (guiaIdeal < 0) {
-                return showError(`El 4% son ${formatMoney(presupuestoTotal)}. No alcanza para los $700 de gestión. Por favor pide confirmar la salida antes.`);
-            }
-
             const guidesParaDestino = shippingData.filter(d => d.destino === destino);
             if(guidesParaDestino.length === 0) {
                 return showError("No hay histórico para este destino.");
@@ -330,7 +383,16 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
             });
 
             document.getElementById('resTotal4').textContent = formatMoney(presupuestoTotal);
-            document.getElementById('resGuiaIdeal').textContent = formatMoney(guiaIdeal);
+            
+            // Actualiza el Costo Ideal (lo vuelve rojo si es negativo)
+            const guiaIdealEl = document.getElementById('resGuiaIdeal');
+            guiaIdealEl.textContent = formatMoney(guiaIdeal);
+            if(guiaIdeal < 0) {
+                guiaIdealEl.classList.replace('text-green-600', 'text-red-600');
+            } else {
+                guiaIdealEl.classList.replace('text-red-600', 'text-green-600');
+            }
+
             document.getElementById('matchDestino').textContent = mejorGuia.destino;
             document.getElementById('matchBultos').textContent = mejorGuia.bultos + " bulto(s)";
             document.getElementById('matchCosto').textContent = formatMoney(mejorGuia.costo_guia);
@@ -339,7 +401,11 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
             matchLinkEl.href = mejorGuia.rastreo;
             matchLinkEl.setAttribute('data-link', mejorGuia.rastreo);
 
-            if (sePasoPresupuesto) {
+            // Determina qué alerta mostrar
+            if (guiaIdeal < 0) {
+                document.getElementById('matchCosto').classList.replace('text-blue-700', 'text-red-600');
+                showError(`⚠️ El 4% son ${formatMoney(presupuestoTotal)}. No cubre los $700 de gestión. ¡Pide confirmar la salida antes!`);
+            } else if (sePasoPresupuesto) {
                 document.getElementById('matchCosto').classList.replace('text-blue-700', 'text-red-600');
                 showError("Ninguna guía cumple el presupuesto ideal. Esta es la más cercana en bultos.");
             } else {
