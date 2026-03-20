@@ -1,1 +1,416 @@
-#index
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tabulador Castores 4%</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        /* Smooth transitions */
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Hide number input arrows */
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f3f4f6; }
+        ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-900 antialiased h-screen overflow-hidden selection:bg-blue-200">
+
+    <!-- Mobile Container -->
+    <div class="max-w-md mx-auto bg-white h-full shadow-2xl relative flex flex-col border-x border-gray-200">
+        
+        <!-- Header -->
+        <header class="p-5 flex justify-between items-center z-10 bg-white border-b border-gray-100">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center border border-blue-100">
+                    <i class="fa-solid fa-truck-fast text-blue-600 text-lg"></i>
+                </div>
+                <h1 class="text-lg font-bold text-gray-800 tracking-wide">Castores <span class="text-blue-500">4%</span></h1>
+            </div>
+            <button id="btnConfig" class="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center border border-gray-200 hover:bg-gray-100 transition text-gray-500 hover:text-gray-800" aria-label="Configuración">
+                <i class="fa-solid fa-gear"></i>
+            </button>
+        </header>
+
+        <!-- Main Display (Like a calculator) -->
+        <div class="px-6 py-8 flex flex-col items-end border-b border-gray-200 bg-gradient-to-b from-blue-50/50 to-white">
+            <span class="text-gray-500 text-sm font-bold tracking-wider uppercase mb-2">Monto Facturado</span>
+            <div class="flex items-center text-6xl font-light w-full justify-end">
+                <span class="text-gray-400 mr-2 text-4xl">$</span>
+                <input type="text" id="facturadoInput" inputmode="decimal" placeholder="0.00" class="bg-transparent text-right outline-none w-full placeholder-gray-300 text-gray-900 font-normal truncate">
+            </div>
+        </div>
+
+        <!-- Main Content (Scrollable) -->
+        <main class="p-6 space-y-5 flex-1 overflow-y-auto pb-32 bg-gray-50">
+            
+            <div id="loadingData" class="flex flex-col items-center justify-center py-10 hidden">
+                <i class="fa-solid fa-circle-notch fa-spin text-blue-600 text-3xl mb-3"></i>
+                <span class="text-sm text-gray-500 font-medium tracking-wide">Sincronizando...</span>
+            </div>
+
+            <!-- Inputs Area -->
+            <div class="space-y-4">
+                <!-- Destino -->
+                <div class="bg-white p-4 rounded-2xl flex items-center gap-4 border border-gray-300 shadow-sm focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition-all">
+                    <i class="fa-solid fa-map-location-dot text-gray-400 w-5 text-center"></i>
+                    <div class="relative w-full">
+                        <select id="destinoSelect" class="bg-transparent w-full outline-none text-gray-800 appearance-none font-medium cursor-pointer">
+                            <option value="" class="text-gray-500">Selecciona el destino...</option>
+                        </select>
+                        <i class="fa-solid fa-chevron-down absolute right-0 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none text-sm"></i>
+                    </div>
+                </div>
+
+                <!-- Bultos -->
+                <div class="bg-white p-4 rounded-2xl flex items-center gap-4 border border-gray-300 shadow-sm focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition-all">
+                    <i class="fa-solid fa-boxes-stacked text-gray-400 w-5 text-center"></i>
+                    <input type="number" id="bultosInput" inputmode="numeric" placeholder="Cantidad de bultos" class="bg-transparent w-full outline-none text-gray-800 font-medium placeholder-gray-400">
+                </div>
+            </div>
+
+            <!-- Error Message -->
+            <div id="errorMsg" class="hidden bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm font-medium flex items-start gap-3 shadow-sm">
+                <i class="fa-solid fa-triangle-exclamation mt-0.5 text-red-500"></i>
+                <span id="errorText"></span>
+            </div>
+
+            <!-- Results Section -->
+            <div id="resultadosSection" class="hidden space-y-5 fade-in pt-4">
+                
+                <!-- Financial Breakdown -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex flex-col justify-center text-center">
+                        <span class="block text-[10px] text-gray-500 uppercase tracking-wider font-bold mb-1">Presupuesto (4%)</span>
+                        <span id="resTotal4" class="block text-xl font-bold text-blue-700">...</span>
+                    </div>
+                    <div class="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex flex-col justify-center text-center">
+                        <span class="block text-[10px] text-gray-500 uppercase tracking-wider font-bold mb-1">Gestión Fija</span>
+                        <span class="block text-xl font-bold text-red-600">-$700.00</span>
+                    </div>
+                </div>
+
+                <!-- Ideal Guide Highlight -->
+                <div class="bg-green-50 p-6 rounded-3xl border border-green-200 text-center relative overflow-hidden shadow-sm">
+                    <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-green-400 to-transparent opacity-50"></div>
+                    <span class="block text-xs text-green-700 uppercase tracking-widest font-bold mb-2">Costo Ideal Guía</span>
+                    <span id="resGuiaIdeal" class="block text-4xl font-light text-green-600 tracking-tight">...</span>
+                </div>
+
+                <!-- Match Section -->
+                <div id="matchSection" class="bg-blue-50 border border-blue-200 rounded-3xl p-5 mt-4 relative shadow-sm">
+                    <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-white px-4 py-1.5 rounded-full border border-blue-200 flex items-center gap-2 shadow-sm">
+                        <i class="fa-solid fa-bolt text-yellow-500 text-xs"></i>
+                        <span class="text-xs text-blue-700 font-bold uppercase tracking-wider">Match Encontrado</span>
+                    </div>
+                    
+                    <div class="space-y-3 mt-3 mb-5">
+                        <div class="flex justify-between items-center border-b border-blue-100 pb-2">
+                            <span class="text-gray-600 text-sm">Destino Histórico</span>
+                            <span id="matchDestino" class="font-bold text-gray-800">...</span>
+                        </div>
+                        <div class="flex justify-between items-center border-b border-blue-100 pb-2">
+                            <span class="text-gray-600 text-sm">Bultos</span>
+                            <span id="matchBultos" class="font-bold text-gray-800 bg-white border border-gray-200 px-3 py-1 rounded-lg text-xs">...</span>
+                        </div>
+                        <div class="flex justify-between items-center pt-1">
+                            <span class="text-gray-600 text-sm">Costo de esta guía</span>
+                            <span id="matchCosto" class="font-black text-blue-700 text-xl">...</span>
+                        </div>
+                    </div>
+
+                    <a id="matchLink" href="#" target="_blank" class="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-600/30 transition-all">
+                        <i class="fa-solid fa-up-right-from-square"></i> Abrir Guía
+                    </a>
+                    
+                    <button id="btnCopiar" class="w-full mt-3 flex items-center justify-center gap-2 text-gray-500 hover:text-gray-800 font-semibold py-2 text-sm transition-colors">
+                        <i class="fa-regular fa-copy"></i> Copiar enlace de rastreo
+                    </button>
+                </div>
+
+            </div>
+
+        </main>
+
+        <!-- Floating Action Button -->
+        <div class="absolute bottom-0 left-0 w-full p-6 bg-gradient-to-t from-gray-50 via-gray-50 to-transparent pointer-events-none flex justify-center pb-8">
+            <button id="btnCalcular" class="w-full max-w-[90%] pointer-events-auto bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg py-4 rounded-2xl shadow-xl shadow-blue-600/20 transition-all flex justify-center items-center gap-3 active:scale-[0.98]">
+                <i class="fa-solid fa-calculator text-blue-200"></i> Calcular Envíos
+            </button>
+        </div>
+
+        <!-- Config Modal -->
+        <div id="configModal" class="fixed inset-0 bg-gray-900/60 z-50 hidden flex-col justify-end fade-in backdrop-blur-sm">
+            <div class="bg-white rounded-t-3xl p-6 shadow-2xl relative border-t border-gray-200">
+                <div class="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-6"></div>
+                
+                <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-3">
+                    <i class="fa-brands fa-google-drive text-green-500"></i> Origen de Datos
+                </h2>
+                
+                <p class="text-sm text-gray-600 mb-5 leading-relaxed">
+                    Esta es la URL de tu API de Google Apps Script. El tabulador ya lee desde ella por defecto.
+                </p>
+
+                <div class="relative mb-6">
+                    <i class="fa-solid fa-link absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                    <input type="url" id="sheetUrlInput" placeholder="https://script.google.com/macros/..." class="w-full p-4 pl-11 border border-gray-300 rounded-xl bg-gray-50 text-gray-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm placeholder-gray-400 transition-all">
+                </div>
+                
+                <div class="flex flex-col gap-3">
+                    <button id="btnSaveConfig" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-600/20 transition-all">
+                        Guardar y Sincronizar
+                    </button>
+                    <button id="btnResetConfig" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3.5 rounded-xl border border-gray-200 transition-all">
+                        Usar Datos de Prueba
+                    </button>
+                    <button id="btnCloseConfig" class="w-full text-gray-500 hover:text-gray-800 font-semibold py-2 mt-2">
+                        Cancelar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // === DATOS DE MUESTRA ===
+        const fallbackCSV = `RASTREO,Folio,COMPLETO,destino,bultos,Fecha Emisión,Gestion,facturado,costo guia,
+https://www.castores.com.mx/rastrear.html?guide_numbers=09130102350,102350,9130102350,"GUADALAJARA, JAL.",3,2025-01-08 14:05:15,500,11570.04,557.48,0.091398
+https://www.castores.com.mx/rastrear.html?guide_numbers=09130102353,102353,9130102353,"MONTERREY, N.L.",5,2025-01-08 14:22:15,500,7500,821.92,0.176256
+https://www.castores.com.mx/globales/facturacion.html?factura=09130122100,,09130122100,"MONTERREY, N.L.",14,,500,22146,1393.26,0.085489
+https://www.castores.com.mx/globales/facturacion.html?factura=09130122104,,09130122104,"MERIDA, YUC.",47,,500,84900,2545.4,0.035870
+https://www.castores.com.mx/globales/facturacion.html?factura=09130122171,,09130122171,"CABO SAN LUCAS, B.C.S.",5,,500,10285.8,1462.45,0.190792
+https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130122173,"SAN JOSE DEL CABO, B.C.S.",16,,500,31680,2679.5,0.0845`;
+
+        // === VARIABLES GLOBALES ===
+        let shippingData = []; 
+        const GESTION_FIJA = 700; 
+
+        // DOM Elements
+        const destinoSelect = document.getElementById('destinoSelect');
+        const facturadoInput = document.getElementById('facturadoInput');
+        const bultosInput = document.getElementById('bultosInput');
+        const btnCalcular = document.getElementById('btnCalcular');
+        const errorMsg = document.getElementById('errorMsg');
+        const errorText = document.getElementById('errorText');
+        const resultadosSection = document.getElementById('resultadosSection');
+        const loadingData = document.getElementById('loadingData');
+
+        // URL proporcionada por defecto
+        const defaultApiUrl = 'https://script.google.com/macros/s/AKfycbzRTrIddWYk_-q-XQf5Dhsh6jbxbPz21ealfE8_Gt-bJVY3LbZWKgSuP_piAizByLK-/exec';
+
+        // Formatters
+        const formatMoney = (amount) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(amount);
+        const parseMoney = (str) => parseFloat(str.replace(/[^0-9.-]+/g, "")) || 0;
+
+        // Auto-format currency on input blur/focus
+        facturadoInput.addEventListener('blur', function() {
+            let val = parseMoney(this.value);
+            if(val > 0) this.value = formatMoney(val).replace('$', '').trim(); // Remove default $ to use the UI one
+        });
+        facturadoInput.addEventListener('focus', function() {
+            let val = parseMoney(this.value);
+            if(val > 0) this.value = val;
+            else this.value = '';
+        });
+
+        // === PARSER DE CSV ===
+        function parseCSV(csvText) {
+            const lines = csvText.split('\n').filter(line => line.trim() !== '');
+            const data = [];
+            const regex = /,(?=(?:(?:[^"]*"){2})*[^"]*$)/;
+
+            for (let i = 1; i < lines.length; i++) {
+                const cols = lines[i].split(regex).map(col => col.replace(/^"|"$/g, '').trim());
+                if(cols.length >= 9) {
+                    data.push({
+                        rastreo: cols[0],
+                        destino: cols[3],
+                        bultos: parseInt(cols[4]) || 0,
+                        costo_guia: parseFloat(cols[8]) || 0
+                    });
+                }
+            }
+            return data;
+        }
+
+        // === CARGA DE DATOS ===
+        async function loadData() {
+            loadingData.classList.remove('hidden');
+            let rawData = fallbackCSV;
+            
+            // Usamos la URL guardada del usuario o la URL de API por defecto
+            const sheetUrl = localStorage.getItem('castoresSheetUrl') || defaultApiUrl;
+
+            if (sheetUrl && sheetUrl.trim() !== '') {
+                try {
+                    const response = await fetch(sheetUrl);
+                    if (response.ok) {
+                        rawData = await response.text();
+                    }
+                } catch (e) {
+                    console.error("Error fetching Sheets", e);
+                }
+            }
+
+            shippingData = parseCSV(rawData);
+            populateDestinos();
+            loadingData.classList.add('hidden');
+        }
+
+        function populateDestinos() {
+            // Remueve destinos que contengan "TIJUANA"
+            const uniqueDestinos = [...new Set(shippingData.map(item => item.destino))]
+                .filter(d => d && !d.toUpperCase().includes('TIJUANA'))
+                .sort();
+            
+            destinoSelect.innerHTML = '<option value="" class="text-gray-500">Selecciona el destino...</option>';
+            uniqueDestinos.forEach(destino => {
+                const opt = document.createElement('option');
+                opt.value = destino;
+                opt.textContent = destino;
+                opt.className = "text-gray-800 bg-white";
+                destinoSelect.appendChild(opt);
+            });
+        }
+
+        // === LÓGICA PRINCIPAL ===
+        btnCalcular.addEventListener('click', () => {
+            errorMsg.classList.add('hidden');
+            resultadosSection.classList.add('hidden');
+
+            const destino = destinoSelect.value;
+            const facturado = parseMoney(facturadoInput.value);
+            const bultosReq = parseInt(bultosInput.value) || 0;
+
+            if (!facturado || facturado <= 0) return showError("Ingresa un monto facturado válido.");
+            if (!destino) return showError("Selecciona un destino de la lista.");
+            if (bultosReq <= 0) return showError("Ingresa la cantidad de bultos.");
+
+            const presupuestoTotal = facturado * 0.04;
+            const guiaIdeal = presupuestoTotal - GESTION_FIJA;
+
+            if (guiaIdeal < 0) {
+                return showError(`El 4% son ${formatMoney(presupuestoTotal)}. No alcanza para los $700 de gestión. Por favor pide confirmar la salida antes.`);
+            }
+
+            const guidesParaDestino = shippingData.filter(d => d.destino === destino);
+            if(guidesParaDestino.length === 0) {
+                return showError("No hay histórico para este destino.");
+            }
+
+            let candidatosValidos = guidesParaDestino.filter(d => d.costo_guia <= guiaIdeal);
+            let sePasoPresupuesto = false;
+            
+            if (candidatosValidos.length === 0) {
+                sePasoPresupuesto = true;
+                candidatosValidos = guidesParaDestino; 
+            }
+
+            let mejorGuia = candidatosValidos.reduce((prev, curr) => {
+                const diffPrev = Math.abs(prev.bultos - bultosReq);
+                const diffCurr = Math.abs(curr.bultos - bultosReq);
+                if (diffCurr < diffPrev) return curr;
+                if (diffCurr > diffPrev) return prev; 
+                return (curr.costo_guia < prev.costo_guia) ? curr : prev;
+            });
+
+            document.getElementById('resTotal4').textContent = formatMoney(presupuestoTotal);
+            document.getElementById('resGuiaIdeal').textContent = formatMoney(guiaIdeal);
+            document.getElementById('matchDestino').textContent = mejorGuia.destino;
+            document.getElementById('matchBultos').textContent = mejorGuia.bultos + " bulto(s)";
+            document.getElementById('matchCosto').textContent = formatMoney(mejorGuia.costo_guia);
+            
+            const matchLinkEl = document.getElementById('matchLink');
+            matchLinkEl.href = mejorGuia.rastreo;
+            matchLinkEl.setAttribute('data-link', mejorGuia.rastreo);
+
+            if (sePasoPresupuesto) {
+                document.getElementById('matchCosto').classList.replace('text-blue-700', 'text-red-600');
+                showError("Ninguna guía cumple el presupuesto ideal. Esta es la más cercana en bultos.");
+            } else {
+                document.getElementById('matchCosto').classList.replace('text-red-600', 'text-blue-700');
+            }
+
+            resultadosSection.classList.remove('hidden');
+            setTimeout(() => {
+                resultadosSection.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            }, 100);
+        });
+
+        function showError(msg) {
+            errorText.textContent = msg;
+            errorMsg.classList.remove('hidden');
+        }
+
+        // === COPY LOGIC ===
+        document.getElementById('btnCopiar').addEventListener('click', () => {
+            const link = document.getElementById('matchLink').getAttribute('data-link');
+            const btn = document.getElementById('btnCopiar');
+            const originalHTML = btn.innerHTML;
+            
+            navigator.clipboard.writeText(link).then(() => {
+                btn.innerHTML = '<i class="fa-solid fa-check text-green-600"></i> <span class="text-green-600">¡Copiado!</span>';
+                setTimeout(() => btn.innerHTML = originalHTML, 2000);
+            }).catch(() => {
+                const textArea = document.createElement("textarea");
+                textArea.value = link;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    btn.innerHTML = '<i class="fa-solid fa-check text-green-600"></i> <span class="text-green-600">¡Copiado!</span>';
+                } catch (err) {}
+                document.body.removeChild(textArea);
+                setTimeout(() => btn.innerHTML = originalHTML, 2000);
+            });
+        });
+
+        // === MODAL CONFIGURACIÓN ===
+        const modal = document.getElementById('configModal');
+        document.getElementById('btnConfig').addEventListener('click', () => {
+            // Cargar URL guardada o la default
+            document.getElementById('sheetUrlInput').value = localStorage.getItem('castoresSheetUrl') || defaultApiUrl;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        });
+
+        const closeModal = () => {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        };
+
+        document.getElementById('btnCloseConfig').addEventListener('click', closeModal);
+
+        document.getElementById('btnSaveConfig').addEventListener('click', () => {
+            localStorage.setItem('castoresSheetUrl', document.getElementById('sheetUrlInput').value);
+            closeModal();
+            loadData();
+        });
+
+        document.getElementById('btnResetConfig').addEventListener('click', () => {
+            localStorage.removeItem('castoresSheetUrl');
+            closeModal();
+            loadData();
+        });
+
+        // INIT
+        loadData();
+
+    </script>
+</body>
+</html>
