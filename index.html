@@ -6,6 +6,11 @@
     <title>Tabulador Castores 4%</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- Librerías para generar PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+
     <style>
         /* Smooth transitions */
         .fade-in { animation: fadeIn 0.3s ease-in-out; }
@@ -154,7 +159,7 @@
 
         <!-- Config Modal -->
         <div id="configModal" class="fixed inset-0 bg-gray-900/60 z-50 hidden flex-col justify-end fade-in backdrop-blur-sm">
-            <div class="bg-white rounded-t-3xl p-6 shadow-2xl relative border-t border-gray-200">
+            <div class="bg-white rounded-t-3xl p-6 shadow-2xl relative border-t border-gray-200 max-h-[90vh] overflow-y-auto">
                 <div class="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-6"></div>
                 
                 <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-3">
@@ -170,15 +175,23 @@
                     <input type="url" id="sheetUrlInput" placeholder="https://script.google.com/macros/..." class="w-full p-4 pl-11 border border-gray-300 rounded-xl bg-gray-50 text-gray-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm placeholder-gray-400 transition-all">
                 </div>
                 
-                <div class="flex flex-col gap-3">
+                <div class="flex flex-col gap-3 border-b border-gray-200 pb-5 mb-2">
                     <button id="btnSaveConfig" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-600/20 transition-all">
                         Guardar y Sincronizar
                     </button>
                     <button id="btnResetConfig" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3.5 rounded-xl border border-gray-200 transition-all">
                         Usar Datos de Prueba
                     </button>
-                    <button id="btnCloseConfig" class="w-full text-gray-500 hover:text-gray-800 font-semibold py-2 mt-2">
-                        Cancelar
+                </div>
+
+                <!-- Botón de PDF -->
+                <div class="flex flex-col gap-3 mt-3">
+                    <button id="btnDownloadPDF" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-red-600/20 transition-all flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-file-pdf"></i> Descargar Tabulador Físico (PDF)
+                    </button>
+                    
+                    <button id="btnCloseConfig" class="w-full text-gray-500 hover:text-gray-800 font-semibold py-2 mt-1">
+                        Cerrar
                     </button>
                 </div>
             </div>
@@ -252,11 +265,9 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
         }
 
         function parseCSV(csvText) {
-            // Maneja retornos de carro de Windows y Mac/Linux
             const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
             if (lines.length === 0) return [];
             
-            // 1. Buscar la fila de encabezados real (por si hay filas en blanco o títulos al inicio)
             let headerIndex = 0;
             let headers = [];
             for (let i = 0; i < Math.min(5, lines.length); i++) {
@@ -271,14 +282,14 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
                 headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim());
             }
             
-            // 2. Buscar índices exactos con palabras clave más seguras
             let iRastreo = headers.findIndex(h => h.includes('rastreo') || h.includes('link') || h.includes('url'));
+            let iFolio = headers.findIndex(h => h.includes('completo') || h.includes('folio') || h.includes('guia'));
             let iDestino = headers.findIndex(h => h.includes('destino') || h.includes('ciudad') || h.includes('estado'));
             let iBultos = headers.findIndex(h => h.includes('bulto') || h.includes('pieza') || h.includes('cant'));
             let iCosto = headers.findIndex(h => h.includes('costo') || h.includes('precio') || h.includes('importe'));
 
-            // Fallback en caso de que la primera línea no sean encabezados o tengan otro nombre
             if (iRastreo === -1) iRastreo = 0;
+            if (iFolio === -1) iFolio = 2; // Columna C por defecto
             if (iDestino === -1) iDestino = 3;
             if (iBultos === -1) iBultos = 4;
             if (iCosto === -1) iCosto = 8;
@@ -286,15 +297,12 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
             const data = [];
             for (let i = headerIndex + 1; i < lines.length; i++) {
                 const cols = parseCSVLine(lines[i]);
-                
-                // Asegurarnos de que esta línea tiene datos hasta donde necesitamos
                 if (cols.length > Math.max(iDestino, iCosto)) {
                     const destinoVal = cols[iDestino];
-                    
-                    // EXCLUYE filas vacías y valores que sean SOLO números (como las guías)
                     if(destinoVal && destinoVal.length > 2 && isNaN(destinoVal.replace(/ /g, ''))) { 
                         data.push({
                             rastreo: cols[iRastreo] || "",
+                            folio: cols[iFolio] || "N/A",
                             destino: destinoVal.toUpperCase(),
                             bultos: parseInt(cols[iBultos]) || 0,
                             costo_guia: parseFloat((cols[iCosto] || "").replace(/[^0-9.-]+/g, "")) || 0
@@ -309,8 +317,6 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
         async function loadData() {
             loadingData.classList.remove('hidden');
             let rawData = fallbackCSV;
-            
-            // Usamos la URL guardada del usuario o la URL de API por defecto
             const sheetUrl = localStorage.getItem('castoresSheetUrl') || defaultApiUrl;
 
             if (sheetUrl && sheetUrl.trim() !== '') {
@@ -330,7 +336,6 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
         }
 
         function populateDestinos() {
-            // Filtra nulos, remueve destinos que contengan "TIJUANA" y bloquea puros números por seguridad
             const uniqueDestinos = [...new Set(shippingData.map(item => item.destino))]
                 .filter(d => d && !d.includes('TIJUANA') && isNaN(d.replace(/ /g, '')))
                 .sort();
@@ -384,7 +389,6 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
 
             document.getElementById('resTotal4').textContent = formatMoney(presupuestoTotal);
             
-            // Actualiza el Costo Ideal (lo vuelve rojo si es negativo)
             const guiaIdealEl = document.getElementById('resGuiaIdeal');
             guiaIdealEl.textContent = formatMoney(guiaIdeal);
             if(guiaIdeal < 0) {
@@ -401,7 +405,6 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
             matchLinkEl.href = mejorGuia.rastreo;
             matchLinkEl.setAttribute('data-link', mejorGuia.rastreo);
 
-            // Determina qué alerta mostrar
             if (guiaIdeal < 0) {
                 document.getElementById('matchCosto').classList.replace('text-blue-700', 'text-red-600');
                 showError(`⚠️ El 4% son ${formatMoney(presupuestoTotal)}. No cubre los $700 de gestión. ¡Pide confirmar la salida antes!`);
@@ -446,10 +449,78 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
             });
         });
 
+        // === GENERAR PDF ===
+        document.getElementById('btnDownloadPDF').addEventListener('click', () => {
+            if (shippingData.length === 0) {
+                alert("No hay datos cargados para exportar.");
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            // Configurar Título del PDF
+            doc.setFontSize(16);
+            doc.setTextColor(30, 58, 138); // bg-blue-900
+            doc.text("Tabulador Físico de Envíos - Castores (Regla 4%)", 14, 20);
+            
+            // Subtítulo con fecha
+            doc.setFontSize(10);
+            doc.setTextColor(100);
+            doc.text(`Actualizado al: ${new Date().toLocaleDateString()} | Comisión Gestión: $${GESTION_FIJA}`, 14, 27);
+
+            // Ordenar los datos alfabéticamente por Destino, y luego por número de bultos
+            const sortedData = [...shippingData]
+                .filter(d => d.destino && !d.destino.includes('TIJUANA') && isNaN(d.destino.replace(/ /g, '')))
+                .sort((a, b) => {
+                    if (a.destino < b.destino) return -1;
+                    if (a.destino > b.destino) return 1;
+                    return a.bultos - b.bultos;
+                });
+
+            // Columnas de la tabla PDF
+            const tableColumn = ["Destino", "Folio Guía", "Bultos", "Costo Guía Histórico", "Venta Mínima Requerida (4%)"];
+            const tableRows = [];
+
+            sortedData.forEach(item => {
+                // Cálculo inverso: Cuál es la venta mínima necesaria para que este costo y la gestión den 4%
+                // Venta Minima * 0.04 = Costo Guia + 700
+                const ventaMinima = (item.costo_guia + GESTION_FIJA) / 0.04;
+
+                const rowData = [
+                    item.destino,
+                    item.folio,
+                    item.bultos + " bulto(s)",
+                    formatMoney(item.costo_guia),
+                    formatMoney(ventaMinima)
+                ];
+                tableRows.push(rowData);
+            });
+
+            // Renderizar tabla con AutoTable
+            doc.autoTable({
+                head: [tableColumn],
+                body: tableRows,
+                startY: 32,
+                theme: 'striped',
+                styles: { fontSize: 8 }, // Letra un poco más pequeña para ajustar 5 columnas
+                headStyles: { fillColor: [37, 99, 235] }, // Azul
+                columnStyles: {
+                    0: { cellWidth: 50 }, // Destino
+                    1: { halign: 'center', textColor: [100, 100, 100] }, // Folio
+                    2: { halign: 'center' }, // Bultos centrado
+                    3: { halign: 'right', fontStyle: 'bold' }, // Costo guía derecha
+                    4: { halign: 'right', fontStyle: 'bold', textColor: [22, 163, 74] } // Venta Min en verde
+                }
+            });
+
+            // Descargar
+            doc.save(`Tabulador_Castores_${new Date().toISOString().split('T')[0]}.pdf`);
+        });
+
         // === MODAL CONFIGURACIÓN ===
         const modal = document.getElementById('configModal');
         document.getElementById('btnConfig').addEventListener('click', () => {
-            // Cargar URL guardada o la default
             document.getElementById('sheetUrlInput').value = localStorage.getItem('castoresSheetUrl') || defaultApiUrl;
             modal.classList.remove('hidden');
             modal.classList.add('flex');
