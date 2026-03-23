@@ -102,21 +102,31 @@
                         <span class="block text-[10px] text-gray-500 uppercase tracking-wider font-bold mb-1">Presupuesto (4%)</span>
                         <span id="resTotal4" class="block text-xl font-bold text-blue-700">...</span>
                     </div>
-                    <div class="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex flex-col justify-center text-center">
-                        <span class="block text-[10px] text-gray-500 uppercase tracking-wider font-bold mb-1">Gestión Fija</span>
-                        <span class="block text-xl font-bold text-red-600">-$700.00</span>
+                    
+                    <!-- Control interactivo de Gestión -->
+                    <div class="bg-red-50 p-3 rounded-2xl border border-red-200 shadow-sm flex flex-col justify-center items-center relative">
+                        <span class="block text-[10px] text-red-500 uppercase tracking-wider font-bold mb-1">Gestión Fija</span>
+                        <div class="flex items-center justify-between w-full max-w-[140px] mt-1">
+                            <button id="btnMinusGestion" class="w-8 h-8 rounded-full bg-white text-red-600 font-bold border border-red-200 shadow-sm flex items-center justify-center hover:bg-red-100 active:scale-95 transition-all focus:outline-none" aria-label="Restar $50">
+                                <i class="fa-solid fa-minus text-sm"></i>
+                            </button>
+                            <span id="resGestion" class="text-xl font-bold text-red-600">-$700</span>
+                            <button id="btnPlusGestion" class="w-8 h-8 rounded-full bg-white text-red-600 font-bold border border-red-200 shadow-sm flex items-center justify-center hover:bg-red-100 active:scale-95 transition-all focus:outline-none" aria-label="Sumar $50">
+                                <i class="fa-solid fa-plus text-sm"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Ideal Guide Highlight -->
-                <div class="bg-green-50 p-6 rounded-3xl border border-green-200 text-center relative overflow-hidden shadow-sm">
-                    <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-green-400 to-transparent opacity-50"></div>
-                    <span class="block text-xs text-green-700 uppercase tracking-widest font-bold mb-2">Costo Ideal Guía</span>
-                    <span id="resGuiaIdeal" class="block text-4xl font-light text-green-600 tracking-tight">...</span>
+                <div class="bg-green-50 p-6 rounded-3xl border border-green-200 text-center relative overflow-hidden shadow-sm transition-colors duration-300" id="cardGuiaIdeal">
+                    <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-green-400 to-transparent opacity-50" id="cardGuiaIdealBar"></div>
+                    <span class="block text-xs text-green-700 uppercase tracking-widest font-bold mb-2" id="labelGuiaIdeal">Costo Ideal Guía</span>
+                    <span id="resGuiaIdeal" class="block text-4xl font-light text-green-600 tracking-tight transition-all">...</span>
                 </div>
 
                 <!-- Match Section -->
-                <div id="matchSection" class="bg-blue-50 border border-blue-200 rounded-3xl p-5 mt-4 relative shadow-sm">
+                <div id="matchSection" class="bg-blue-50 border border-blue-200 rounded-3xl p-5 mt-4 relative shadow-sm transition-all duration-300">
                     <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-white px-4 py-1.5 rounded-full border border-blue-200 flex items-center gap-2 shadow-sm">
                         <i class="fa-solid fa-bolt text-yellow-500 text-xs"></i>
                         <span class="text-xs text-blue-700 font-bold uppercase tracking-wider">Match Encontrado</span>
@@ -133,7 +143,7 @@
                         </div>
                         <div class="flex justify-between items-center pt-1">
                             <span class="text-gray-600 text-sm">Costo de esta guía</span>
-                            <span id="matchCosto" class="font-black text-blue-700 text-xl">...</span>
+                            <span id="matchCosto" class="font-black text-blue-700 text-xl transition-colors">...</span>
                         </div>
                         
                         <!-- Mensaje Histórico de incumplimiento -->
@@ -217,7 +227,7 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
 
         // === VARIABLES GLOBALES ===
         let shippingData = []; 
-        const GESTION_FIJA = 700; 
+        let currentGestion = 700; // Estado actual de la gestión
 
         // DOM Elements
         const destinoSelect = document.getElementById('destinoSelect');
@@ -228,6 +238,7 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
         const errorText = document.getElementById('errorText');
         const resultadosSection = document.getElementById('resultadosSection');
         const loadingData = document.getElementById('loadingData');
+        const resGestion = document.getElementById('resGestion');
 
         // URL proporcionada por defecto
         const defaultApiUrl = 'https://script.google.com/macros/s/AKfycbzRTrIddWYk_-q-XQf5Dhsh6jbxbPz21ealfE8_Gt-bJVY3LbZWKgSuP_piAizByLK-/exec';
@@ -292,15 +303,15 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
             let iFolio = headers.findIndex(h => h.includes('completo') || h.includes('folio') || h.includes('guia'));
             let iDestino = headers.findIndex(h => h.includes('destino') || h.includes('ciudad') || h.includes('estado'));
             let iBultos = headers.findIndex(h => h.includes('bulto') || h.includes('pieza') || h.includes('cant'));
-            let iFacturado = headers.findIndex(h => h.includes('facturado') || h.includes('venta')); // Nueva columna
+            let iFacturado = headers.findIndex(h => h.includes('facturado') || h.includes('venta')); 
             let iCosto = headers.findIndex(h => h.includes('costo') || h.includes('precio') || h.includes('importe'));
 
-            // Fallbacks si no encuentra los nombres exactos
+            // Fallbacks
             if (iRastreo === -1) iRastreo = 0;
-            if (iFolio === -1) iFolio = 2; // Columna C por defecto
+            if (iFolio === -1) iFolio = 2;
             if (iDestino === -1) iDestino = 3;
             if (iBultos === -1) iBultos = 4;
-            if (iFacturado === -1) iFacturado = 7; // Usualmente en H
+            if (iFacturado === -1) iFacturado = 7; 
             if (iCosto === -1) iCosto = 8;
 
             const data = [];
@@ -321,12 +332,10 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
                 }
             }
 
-            // --- FILTRO DE DEDUPLICACIÓN (MÁS BARATO POR DESTINO Y BULTOS) ---
+            // --- FILTRO DE DEDUPLICACIÓN (MÁS BARATO) ---
             const mapaUnicos = new Map();
             data.forEach(item => {
-                // Creamos una clave única que junte Destino y número de bultos (ej. "MONTERREY, N.L.-5")
                 const clave = `${item.destino}-${item.bultos}`;
-                
                 if (!mapaUnicos.has(clave)) {
                     mapaUnicos.set(clave, item);
                 } else {
@@ -377,21 +386,30 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
             });
         }
 
-        // === LÓGICA PRINCIPAL ===
-        btnCalcular.addEventListener('click', () => {
+        // === LÓGICA PRINCIPAL DEL CÁLCULO ===
+        function calculateAndDisplay(isAdjustment = false) {
             errorMsg.classList.add('hidden');
-            resultadosSection.classList.add('hidden');
 
             const destino = destinoSelect.value;
             const facturado = parseMoney(facturadoInput.value);
             const bultosReq = parseInt(bultosInput.value) || 0;
 
-            if (!facturado || facturado <= 0) return showError("Ingresa un monto facturado válido.");
-            if (!destino) return showError("Selecciona un destino de la lista.");
-            if (bultosReq <= 0) return showError("Ingresa la cantidad de bultos.");
+            // Validaciones (si es un ajuste manual y falta un campo, no hace nada para no molestar)
+            if (!facturado || facturado <= 0) {
+                if(!isAdjustment) resultadosSection.classList.add('hidden');
+                return showError("Ingresa un monto facturado válido.");
+            }
+            if (!destino) {
+                if(!isAdjustment) resultadosSection.classList.add('hidden');
+                return showError("Selecciona un destino de la lista.");
+            }
+            if (bultosReq <= 0) {
+                if(!isAdjustment) resultadosSection.classList.add('hidden');
+                return showError("Ingresa la cantidad de bultos.");
+            }
 
             const presupuestoTotal = facturado * 0.04;
-            const guiaIdeal = presupuestoTotal - GESTION_FIJA;
+            const guiaIdeal = presupuestoTotal - currentGestion;
 
             const guidesParaDestino = shippingData.filter(d => d.destino === destino);
             if(guidesParaDestino.length === 0) {
@@ -414,16 +432,33 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
                 return (curr.costo_guia < prev.costo_guia) ? curr : prev;
             });
 
+            // Actualizar Vista de Precios
             document.getElementById('resTotal4').textContent = formatMoney(presupuestoTotal);
+            resGestion.textContent = `-${formatMoney(currentGestion).replace('.00', '')}`;
             
             const guiaIdealEl = document.getElementById('resGuiaIdeal');
+            const cardGuiaIdeal = document.getElementById('cardGuiaIdeal');
+            const cardGuiaIdealBar = document.getElementById('cardGuiaIdealBar');
+            const labelGuiaIdeal = document.getElementById('labelGuiaIdeal');
+            
             guiaIdealEl.textContent = formatMoney(guiaIdeal);
+            
+            // Lógica de colores del recuadro Guía Ideal si entra en negativos
             if(guiaIdeal < 0) {
                 guiaIdealEl.classList.replace('text-green-600', 'text-red-600');
+                cardGuiaIdeal.classList.replace('bg-green-50', 'bg-red-50');
+                cardGuiaIdeal.classList.replace('border-green-200', 'border-red-200');
+                cardGuiaIdealBar.classList.replace('via-green-400', 'via-red-400');
+                labelGuiaIdeal.classList.replace('text-green-700', 'text-red-700');
             } else {
                 guiaIdealEl.classList.replace('text-red-600', 'text-green-600');
+                cardGuiaIdeal.classList.replace('bg-red-50', 'bg-green-50');
+                cardGuiaIdeal.classList.replace('border-red-200', 'border-green-200');
+                cardGuiaIdealBar.classList.replace('via-red-400', 'via-green-400');
+                labelGuiaIdeal.classList.replace('text-red-700', 'text-green-700');
             }
 
+            // Datos de la mejor guía
             document.getElementById('matchDestino').textContent = mejorGuia.destino;
             document.getElementById('matchBultos').textContent = mejorGuia.bultos + " bulto(s)";
             document.getElementById('matchCosto').textContent = formatMoney(mejorGuia.costo_guia);
@@ -432,19 +467,20 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
             matchLinkEl.href = mejorGuia.rastreo;
             matchLinkEl.setAttribute('data-link', mejorGuia.rastreo);
 
-            // Revisa si la guía históricamente cumplió (Costo + 700 debe ser <= al 4% de su venta histórica)
-            const ventaMinimaHist = (mejorGuia.costo_guia + GESTION_FIJA) / 0.04;
+            // Revisa si la guía históricamente cumplió (Costo + currentGestion <= al 4% de su venta histórica)
+            const ventaMinimaHist = (mejorGuia.costo_guia + currentGestion) / 0.04;
             const estatusHistEl = document.getElementById('matchEstatusHist');
             
             if (mejorGuia.facturado > 0 && mejorGuia.facturado < ventaMinimaHist) {
-                estatusHistEl.classList.remove('hidden'); // Muestra la advertencia en pantalla
+                estatusHistEl.classList.remove('hidden'); 
             } else {
-                estatusHistEl.classList.add('hidden'); // Oculta la advertencia
+                estatusHistEl.classList.add('hidden'); 
             }
 
+            // Manejo de Alertas 
             if (guiaIdeal < 0) {
                 document.getElementById('matchCosto').classList.replace('text-blue-700', 'text-red-600');
-                showError(`⚠️ El 4% son ${formatMoney(presupuestoTotal)}. No cubre los $700 de gestión. ¡Pide confirmar la salida antes!`);
+                showError(`⚠️ El 4% son ${formatMoney(presupuestoTotal)}. No cubre los $${currentGestion} de gestión. ¡Pide confirmar la salida antes!`);
             } else if (sePasoPresupuesto) {
                 document.getElementById('matchCosto').classList.replace('text-blue-700', 'text-red-600');
                 showError("Ninguna guía cumple el presupuesto ideal. Esta es la más cercana en bultos.");
@@ -453,9 +489,30 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
             }
 
             resultadosSection.classList.remove('hidden');
-            setTimeout(() => {
-                resultadosSection.scrollIntoView({ behavior: 'smooth', block: 'end' });
-            }, 100);
+            if(!isAdjustment) {
+                setTimeout(() => {
+                    resultadosSection.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                }, 100);
+            }
+        }
+
+        // EVENTOS DEL CÁLCULO
+        btnCalcular.addEventListener('click', () => {
+            currentGestion = 700; // Resetea a 700 al hacer un cálculo nuevo desde 0
+            calculateAndDisplay(false);
+        });
+
+        // Controles de Gestión (+ / -)
+        document.getElementById('btnMinusGestion').addEventListener('click', () => {
+            if(currentGestion >= 50) {
+                currentGestion -= 50;
+                calculateAndDisplay(true); // true indica que es un ajuste, no hace scroll auto
+            }
+        });
+
+        document.getElementById('btnPlusGestion').addEventListener('click', () => {
+            currentGestion += 50;
+            calculateAndDisplay(true);
         });
 
         function showError(msg) {
@@ -498,15 +555,15 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
 
             // Configurar Título del PDF
             doc.setFontSize(16);
-            doc.setTextColor(30, 58, 138); // bg-blue-900
+            doc.setTextColor(30, 58, 138); 
             doc.text("Tabulador Físico de Envíos - Castores (Regla 4%)", 14, 20);
             
             // Subtítulo con fecha
             doc.setFontSize(10);
             doc.setTextColor(100);
-            doc.text(`Actualizado al: ${new Date().toLocaleDateString()} | Comisión Gestión: $${GESTION_FIJA}`, 14, 27);
+            doc.text(`Actualizado al: ${new Date().toLocaleDateString()} | Comisión Gestión Seleccionada: $${currentGestion}`, 14, 27);
 
-            // Ordenar los datos alfabéticamente por Destino, y luego por número de bultos
+            // Ordenar los datos alfabéticamente
             const sortedData = [...shippingData]
                 .filter(d => d.destino && !d.destino.includes('TIJUANA') && isNaN(d.destino.replace(/ /g, '')))
                 .sort((a, b) => {
@@ -515,20 +572,19 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
                     return a.bultos - b.bultos;
                 });
 
-            // Columnas de la tabla PDF (Agregamos Estatus Histórico)
+            // Columnas de la tabla PDF
             const tableColumn = ["Destino", "Folio Guía", "Bts.", "Costo Guía", "Meta Venta (4%)", "Logró 4% Hist."];
             const tableRows = [];
 
             sortedData.forEach(item => {
-                // Cálculo inverso
-                const ventaMinima = (item.costo_guia + GESTION_FIJA) / 0.04;
+                // Cálculo inverso usando la currentGestion (sea 700, 650, etc)
+                const ventaMinima = (item.costo_guia + currentGestion) / 0.04;
                 
-                // Revisar si históricamente lograron esa meta
                 let estatusHist = "✅ Sí";
                 if (item.facturado > 0 && item.facturado < ventaMinima) {
                     estatusHist = "❌ No";
                 } else if (item.facturado === 0) {
-                    estatusHist = "S/D"; // Sin datos
+                    estatusHist = "S/D";
                 }
 
                 const rowData = [
@@ -542,37 +598,35 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
                 tableRows.push(rowData);
             });
 
-            // Renderizar tabla con AutoTable
+            // Renderizar tabla
             doc.autoTable({
                 head: [tableColumn],
                 body: tableRows,
                 startY: 32,
                 theme: 'striped',
                 styles: { fontSize: 8 }, 
-                headStyles: { fillColor: [37, 99, 235] }, // Azul
+                headStyles: { fillColor: [37, 99, 235] }, 
                 columnStyles: {
-                    0: { cellWidth: 45 }, // Destino
-                    1: { halign: 'center', textColor: [100, 100, 100] }, // Folio
-                    2: { halign: 'center' }, // Bultos centrado
-                    3: { halign: 'right', fontStyle: 'bold' }, // Costo guía derecha
-                    4: { halign: 'right', fontStyle: 'bold', textColor: [22, 163, 74] }, // Venta Min en verde
-                    5: { halign: 'center', fontStyle: 'bold' } // Cumplimiento
+                    0: { cellWidth: 45 }, 
+                    1: { halign: 'center', textColor: [100, 100, 100] }, 
+                    2: { halign: 'center' }, 
+                    3: { halign: 'right', fontStyle: 'bold' }, 
+                    4: { halign: 'right', fontStyle: 'bold', textColor: [22, 163, 74] }, 
+                    5: { halign: 'center', fontStyle: 'bold' } 
                 },
-                // Aplicar color dinámico a la última columna según el Estatus
                 didParseCell: function(data) {
                     if (data.section === 'body' && data.column.index === 5) {
                         if (data.cell.raw === '❌ No') {
-                            data.cell.styles.textColor = [220, 38, 38]; // Rojo
+                            data.cell.styles.textColor = [220, 38, 38]; 
                         } else if (data.cell.raw === '✅ Sí') {
-                            data.cell.styles.textColor = [22, 163, 74]; // Verde
+                            data.cell.styles.textColor = [22, 163, 74]; 
                         } else {
-                            data.cell.styles.textColor = [156, 163, 175]; // Gris para S/D
+                            data.cell.styles.textColor = [156, 163, 175]; 
                         }
                     }
                 }
             });
 
-            // Descargar
             doc.save(`Tabulador_Castores_${new Date().toISOString().split('T')[0]}.pdf`);
         });
 
