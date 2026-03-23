@@ -135,6 +135,12 @@
                             <span class="text-gray-600 text-sm">Costo de esta guía</span>
                             <span id="matchCosto" class="font-black text-blue-700 text-xl">...</span>
                         </div>
+                        
+                        <!-- Mensaje Histórico de incumplimiento -->
+                        <div id="matchEstatusHist" class="hidden mt-3 p-2.5 bg-red-50 border border-red-100 rounded-lg flex items-start gap-2 shadow-sm">
+                            <i class="fa-solid fa-circle-exclamation text-red-500 mt-0.5"></i>
+                            <p class="text-xs text-red-700 font-medium leading-tight">Históricamente esta guía <b class="font-bold">no cumplió</b> el 4%. Úsala como referencia para intentar negociar un precio más bajo.</p>
+                        </div>
                     </div>
 
                     <a id="matchLink" href="#" target="_blank" class="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-600/30 transition-all">
@@ -286,12 +292,15 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
             let iFolio = headers.findIndex(h => h.includes('completo') || h.includes('folio') || h.includes('guia'));
             let iDestino = headers.findIndex(h => h.includes('destino') || h.includes('ciudad') || h.includes('estado'));
             let iBultos = headers.findIndex(h => h.includes('bulto') || h.includes('pieza') || h.includes('cant'));
+            let iFacturado = headers.findIndex(h => h.includes('facturado') || h.includes('venta')); // Nueva columna
             let iCosto = headers.findIndex(h => h.includes('costo') || h.includes('precio') || h.includes('importe'));
 
+            // Fallbacks si no encuentra los nombres exactos
             if (iRastreo === -1) iRastreo = 0;
             if (iFolio === -1) iFolio = 2; // Columna C por defecto
             if (iDestino === -1) iDestino = 3;
             if (iBultos === -1) iBultos = 4;
+            if (iFacturado === -1) iFacturado = 7; // Usualmente en H
             if (iCosto === -1) iCosto = 8;
 
             const data = [];
@@ -305,6 +314,7 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
                             folio: cols[iFolio] || "N/A",
                             destino: destinoVal.toUpperCase(),
                             bultos: parseInt(cols[iBultos]) || 0,
+                            facturado: parseFloat((cols[iFacturado] || "").replace(/[^0-9.-]+/g, "")) || 0,
                             costo_guia: parseFloat((cols[iCosto] || "").replace(/[^0-9.-]+/g, "")) || 0
                         });
                     }
@@ -318,10 +328,8 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
                 const clave = `${item.destino}-${item.bultos}`;
                 
                 if (!mapaUnicos.has(clave)) {
-                    // Si no existe, lo guardamos
                     mapaUnicos.set(clave, item);
                 } else {
-                    // Si ya existe uno igual, nos quedamos solo con el que cueste menos
                     const existente = mapaUnicos.get(clave);
                     if (item.costo_guia < existente.costo_guia) {
                         mapaUnicos.set(clave, item);
@@ -329,7 +337,6 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
                 }
             });
 
-            // Convertimos el mapa de vuelta a un arreglo normal para usarlo
             return Array.from(mapaUnicos.values());
         }
 
@@ -425,6 +432,16 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
             matchLinkEl.href = mejorGuia.rastreo;
             matchLinkEl.setAttribute('data-link', mejorGuia.rastreo);
 
+            // Revisa si la guía históricamente cumplió (Costo + 700 debe ser <= al 4% de su venta histórica)
+            const ventaMinimaHist = (mejorGuia.costo_guia + GESTION_FIJA) / 0.04;
+            const estatusHistEl = document.getElementById('matchEstatusHist');
+            
+            if (mejorGuia.facturado > 0 && mejorGuia.facturado < ventaMinimaHist) {
+                estatusHistEl.classList.remove('hidden'); // Muestra la advertencia en pantalla
+            } else {
+                estatusHistEl.classList.add('hidden'); // Oculta la advertencia
+            }
+
             if (guiaIdeal < 0) {
                 document.getElementById('matchCosto').classList.replace('text-blue-700', 'text-red-600');
                 showError(`⚠️ El 4% son ${formatMoney(presupuestoTotal)}. No cubre los $700 de gestión. ¡Pide confirmar la salida antes!`);
@@ -498,21 +515,29 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
                     return a.bultos - b.bultos;
                 });
 
-            // Columnas de la tabla PDF
-            const tableColumn = ["Destino", "Folio Guía", "Bultos", "Costo Guía Histórico", "Venta Mínima Requerida (4%)"];
+            // Columnas de la tabla PDF (Agregamos Estatus Histórico)
+            const tableColumn = ["Destino", "Folio Guía", "Bts.", "Costo Guía", "Meta Venta (4%)", "Logró 4% Hist."];
             const tableRows = [];
 
             sortedData.forEach(item => {
-                // Cálculo inverso: Cuál es la venta mínima necesaria para que este costo y la gestión den 4%
-                // Venta Minima * 0.04 = Costo Guia + 700
+                // Cálculo inverso
                 const ventaMinima = (item.costo_guia + GESTION_FIJA) / 0.04;
+                
+                // Revisar si históricamente lograron esa meta
+                let estatusHist = "✅ Sí";
+                if (item.facturado > 0 && item.facturado < ventaMinima) {
+                    estatusHist = "❌ No";
+                } else if (item.facturado === 0) {
+                    estatusHist = "S/D"; // Sin datos
+                }
 
                 const rowData = [
                     item.destino,
                     item.folio,
-                    item.bultos + " bulto(s)",
+                    item.bultos,
                     formatMoney(item.costo_guia),
-                    formatMoney(ventaMinima)
+                    formatMoney(ventaMinima),
+                    estatusHist
                 ];
                 tableRows.push(rowData);
             });
@@ -523,14 +548,27 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
                 body: tableRows,
                 startY: 32,
                 theme: 'striped',
-                styles: { fontSize: 8 }, // Letra un poco más pequeña para ajustar 5 columnas
+                styles: { fontSize: 8 }, 
                 headStyles: { fillColor: [37, 99, 235] }, // Azul
                 columnStyles: {
-                    0: { cellWidth: 50 }, // Destino
+                    0: { cellWidth: 45 }, // Destino
                     1: { halign: 'center', textColor: [100, 100, 100] }, // Folio
                     2: { halign: 'center' }, // Bultos centrado
                     3: { halign: 'right', fontStyle: 'bold' }, // Costo guía derecha
-                    4: { halign: 'right', fontStyle: 'bold', textColor: [22, 163, 74] } // Venta Min en verde
+                    4: { halign: 'right', fontStyle: 'bold', textColor: [22, 163, 74] }, // Venta Min en verde
+                    5: { halign: 'center', fontStyle: 'bold' } // Cumplimiento
+                },
+                // Aplicar color dinámico a la última columna según el Estatus
+                didParseCell: function(data) {
+                    if (data.section === 'body' && data.column.index === 5) {
+                        if (data.cell.raw === '❌ No') {
+                            data.cell.styles.textColor = [220, 38, 38]; // Rojo
+                        } else if (data.cell.raw === '✅ Sí') {
+                            data.cell.styles.textColor = [22, 163, 74]; // Verde
+                        } else {
+                            data.cell.styles.textColor = [156, 163, 175]; // Gris para S/D
+                        }
+                    }
                 }
             });
 
