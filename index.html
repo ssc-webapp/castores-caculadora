@@ -310,7 +310,27 @@ https://www.castores.com.mx/globales/facturacion.html?factura=09130122173,,09130
                     }
                 }
             }
-            return data;
+
+            // --- FILTRO DE DEDUPLICACIÓN (MÁS BARATO POR DESTINO Y BULTOS) ---
+            const mapaUnicos = new Map();
+            data.forEach(item => {
+                // Creamos una clave única que junte Destino y número de bultos (ej. "MONTERREY, N.L.-5")
+                const clave = `${item.destino}-${item.bultos}`;
+                
+                if (!mapaUnicos.has(clave)) {
+                    // Si no existe, lo guardamos
+                    mapaUnicos.set(clave, item);
+                } else {
+                    // Si ya existe uno igual, nos quedamos solo con el que cueste menos
+                    const existente = mapaUnicos.get(clave);
+                    if (item.costo_guia < existente.costo_guia) {
+                        mapaUnicos.set(clave, item);
+                    }
+                }
+            });
+
+            // Convertimos el mapa de vuelta a un arreglo normal para usarlo
+            return Array.from(mapaUnicos.values());
         }
 
         // === CARGA DE DATOS ===
